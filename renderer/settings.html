@@ -1,0 +1,145 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'" />
+  <title>设置 — DeepSeek Harness</title>
+  <link rel="stylesheet" href="common.css" />
+  <style>
+    body { padding: 26px 30px 30px; }
+    h1 {
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+    h1 .mark {
+      width: 30px; height: 30px; border-radius: 9px;
+      background: var(--grad); color: #fff;
+      display: grid; place-items: center;
+      font-size: 12px; font-weight: 800;
+      box-shadow: 0 3px 12px var(--accent-glow);
+    }
+    .sub { color: var(--text-2); font-size: 12.5px; margin-bottom: 22px; }
+    .card { padding: 20px 22px; margin-bottom: 16px; }
+    .card h2 {
+      font-size: 13px;
+      color: var(--text-2);
+      font-weight: 650;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      letter-spacing: 0.2px;
+    }
+    .card h2 svg { opacity: 0.75; }
+    .field { margin-bottom: 15px; }
+    .field:last-child { margin-bottom: 0; }
+    label { display: block; font-weight: 600; margin-bottom: 7px; font-size: 12.5px; }
+    .desc { color: var(--text-3); font-size: 11.5px; margin-top: 6px; line-height: 1.6; }
+    .desc code {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 0 6px;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+    .actions {
+      display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; align-items: center;
+    }
+    .status { font-size: 12.5px; color: var(--success); min-height: 18px; margin-right: auto; }
+    .status.error { color: var(--danger); }
+    .preset-save-row { display: flex; gap: 8px; }
+    .preset-save-row input { flex: 1; }
+    .preset-list { margin-top: 6px; display: flex; flex-direction: column; gap: 8px; }
+    .preset-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 11px 14px;
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      background: var(--surface-2);
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .preset-item:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+    .preset-item.active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .preset-item .info { flex: 1; min-width: 0; }
+    .preset-item .pname { font-weight: 650; font-size: 13px; display: flex; align-items: center; gap: 7px; }
+    .preset-item .pdetail {
+      color: var(--text-2); font-size: 11.5px; margin-top: 3px;
+      font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .preset-item .pactive { color: var(--accent); font-size: 10.5px; font-weight: 600; }
+    .preset-item button { padding: 5px 13px; font-size: 12px; }
+    .preset-empty {
+      color: var(--text-3); font-size: 12.5px;
+      border: 1px dashed var(--border-strong); border-radius: 11px;
+      text-align: center; padding: 18px;
+    }
+    .log-wrap { margin-top: 4px; }
+    .log-console { max-height: 140px; }
+  </style>
+</head>
+<body>
+  <h1><span class="mark">DS</span>DeepSeek Harness 设置</h1>
+  <div class="sub">修改将在保存后自动重启本地服务</div>
+
+  <div class="card">
+    <h2>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
+      模型接入
+    </h2>
+    <div class="field">
+      <label for="apiKey">API Key</label>
+      <input type="password" id="apiKey" placeholder="sk-…" autocomplete="off" />
+      <div class="desc">写入 <code id="envPath">~/.dsh/.env</code>（DEEPSEEK_API_KEY）。留空表示使用系统环境变量。</div>
+    </div>
+    <div class="field">
+      <label for="baseUrl">API 地址（可选）</label>
+      <input type="text" id="baseUrl" placeholder="https://api.deepseek.com" />
+      <div class="desc">第三方中转或代理时填写，默认走官方接口。</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+      本地服务
+    </h2>
+    <div class="field">
+      <label for="port">端口</label>
+      <input type="number" id="port" min="0" max="65535" step="1" />
+      <div class="desc">0 = 自动选择空闲端口（推荐）。服务只监听 127.0.0.1，仅本机可访问。</div>
+    </div>
+    <div class="field log-wrap">
+      <label>服务日志</label>
+      <div class="log-console" id="log">（暂无）</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></svg>
+      配置方案（多配置切换）
+    </h2>
+    <div class="field">
+      <label for="presetName">把当前配置保存为方案</label>
+      <div class="preset-save-row">
+        <input type="text" id="presetName" placeholder="例如：工作、个人、中转站" />
+        <button id="presetSaveBtn" class="primary">保存方案</button>
+      </div>
+      <div class="desc">切换方案会替换 API Key / API 地址 / 端口并自动重启服务。</div>
+    </div>
+    <div class="preset-list" id="presetList"></div>
+  </div>
+
+  <div class="actions">
+    <span class="status" id="status"></span>
+    <button id="cancel" class="ghost">取消</button>
+    <button id="save" class="primary">保存并重启服务</button>
+  </div>
+
+  <script src="settings.js"></script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+minimumReleaseAgeStrict: false
+
+allowBuilds:
+  '@deepseek-ai/dsh-subprocess-local': true
+  '@google/genai': true
+  electron: true
+  electron-winstaller: true
+  koffi: true
+  node-pty: false
+  protobufjs: true

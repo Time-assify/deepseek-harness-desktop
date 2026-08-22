@@ -1,0 +1,61 @@
+{
+  "name": "deepseek-harness-desktop",
+  "productName": "DeepSeek Harness",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness (dsh) 桌面版：内置官方 Web UI，开箱即用",
+  "main": "src/main.mjs",
+  "type": "module",
+  "license": "MIT",
+  "author": "DeepSeek Harness Desktop",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "test:server": "node scripts/test-server.mjs",
+    "dist": "electron-builder --win",
+    "dist:dir": "electron-builder --win --dir"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-web-frontend": "0.1.1-rc.2",
+    "pnpm": "^11.22.0"
+  },
+  "devDependencies": {
+    "electron": "^43.4.1",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.deepseekharness.desktop",
+    "productName": "DeepSeek Harness",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "renderer/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "asar": false,
+    "npmRebuild": false,
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DeepSeek Harness"
+    }
+  }
+}
