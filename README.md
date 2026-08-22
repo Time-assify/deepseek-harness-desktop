@@ -7,9 +7,12 @@
 ## 特性
 
 - **开箱即用**：启动时自动拉起内置的 dsh Web 服务（监听 127.0.0.1，端口自动选择），就绪后窗口内加载官方 Web UI
+- **无边框界面**：主窗口无系统边框，顶部自绘标题栏（浅色/深色主题快速切换、Windows 风格窗口控制、插件/仪表盘/设置快捷入口）
+- **深色/浅色主题**：一键切换，标题栏、设置/插件/仪表盘及官方 Web UI 全部同步
+- **系统托盘**：关闭主窗口最小化到托盘，托盘右键菜单（显示主窗口 / 设置 / 插件商店 / 仪表盘 / 重启服务 / 退出），左键单击/双击恢复窗口
 - **图形化设置**：API Key 写入 `~/.dsh/.env`（与官方 CLI 共享配置），可选自定义 API 地址与端口
 - **多配置切换**：把常用配置（Key / API 地址 / 端口）保存为命名方案，一键切换自动重启
-- **插件商店**：内置 npm 市场搜索（关键词 `dsh-plugin`），一键安装/卸载插件到 web profile（内置 pnpm，无需用户安装 Node/pnpm），安装后自动同步 `dsh.profile.bundles` 并重启服务
+- **插件商店**：内置 npm 市场搜索（关键词 `dsh-plugin`），展示发布者/最近更新/月下载量，支持相关度 / 热门 / 最新排序，一键安装/卸载插件到 web profile（内置 pnpm，无需用户安装 Node/pnpm），安装后自动同步 `dsh.profile.bundles` 并重启服务
 - **会话成本仪表盘**：解析 `~/.dsh/sessions` 的 zstd 会话日志，统计每个会话的输入/缓存/输出 token 与成本估算（按 DeepSeek 官方价格）
 - **便携版**：应用目录放一个 `portable.txt`（或设置环境变量 `DSH_DESKTOP_PORTABLE=1`），所有数据（dsh 数据 + 应用设置）都保存在应用目录的 `data\` 下，U 盘随身带
 - **进程托管**：dsh 作为子进程随应用启停，退出时清理整个进程树，不留孤儿进程
@@ -59,11 +62,14 @@ $env:ELECTRON_BUILDER_BINARIES_MIRROR = "https://npmmirror.com/mirrors/electron-
 
 ```
 Electron 主进程
-├─ BrowserWindow（主窗口）
-│   ├─ 启动页 loading.html（日志 + 状态 + 功能入口）
-│   └─ 就绪后加载 http://127.0.0.1:<port>（官方 Web UI）
+├─ 主窗口（无边框 BrowserWindow）
+│   ├─ 标题栏 titlebar.html（WebContentsView：主题切换 / 窗口控制 / 快捷入口）
+│   ├─ 内容区（WebContentsView）
+│   │   ├─ 启动页 loading.html（日志 + 状态 + 功能入口）
+│   │   └─ 就绪后加载 http://127.0.0.1:<port>（官方 Web UI）
+│   └─ 系统托盘 Tray
 ├─ 设置窗口 settings.html（API Key / Base URL / 端口 / 配置方案）
-├─ 插件商店窗口 plugins.html（npm 搜索 + 安装/卸载）
+├─ 插件商店窗口 plugins.html（npm 搜索 + 元数据 + 排序 + 安装/卸载）
 ├─ 仪表盘窗口 dashboard.html（会话 token 统计 + 成本估算）
 └─ dsh 子进程
     └─ electron.exe（ELECTRON_RUN_AS_NODE=1）--expose-internals
