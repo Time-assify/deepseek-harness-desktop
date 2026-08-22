@@ -24,12 +24,21 @@
 - [pnpm](https://pnpm.io/) ≥ 10（开发/打包需要）
 - 可选：DeepSeek API Key（没有也能打开界面，发送消息前配置即可）
 
-## 快速开始（开发）
+## 获取与快速开始（开发）
 
 ```sh
+# 1. 克隆本仓库并进入目录
+git clone https://github.com/Time-assify/deepseek-harness-desktop.git
+cd deepseek-harness-desktop
+
+# 2. 安装依赖
 pnpm install --config.minimumReleaseAge=0
+
+# 3. 启动
 pnpm start
 ```
+
+> 不想用 git？也可以直接点击仓库页面的绿色 **Code → Download ZIP** 下载解压，然后执行第 2、3 步。
 
 > 锁文件里的包发布较新时，pnpm 11 的 minimumReleaseAge 供应链策略可能拒绝安装，用 `--config.minimumReleaseAge=0` 跳过（仓库内 `pnpm-workspace.yaml` 已配置 `minimumReleaseAgeStrict: false`，通常不需要）。
 
@@ -45,15 +54,6 @@ pnpm run dist:dir    # 仅生成免安装目录，用于快速验证
 ```powershell
 $env:ELECTRON_BUILDER_BINARIES_MIRROR = "https://npmmirror.com/mirrors/electron-builder-binaries/"
 ```
-
-## 测试
-
-```sh
-pnpm run test:server
-```
-
-`scripts/test-server.mjs` 以独立数据目录（系统临时目录）真实拉起 3 次 dsh 服务，回归验证：
-子进程启停、就绪 URL 解析、端口释放、快速重启时的竞态修复。**不会触碰你的 `~/.dsh`。**
 
 ## 工作原理
 
