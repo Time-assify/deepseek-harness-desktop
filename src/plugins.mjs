@@ -235,11 +235,40 @@ export async function searchPlugins(query, { size = 20 } = {}) {
   const response = await fetch(url, { signal: AbortSignal.timeout(15000) })
   if (!response.ok) throw new Error(`npm 搜索失败（HTTP ${response.status}）`)
   const data = await response.json()
-  return (data.objects ?? []).map((entry) => ({
-    name: entry.package.name,
-    version: entry.package.version,
-    description: entry.package.description ?? '',
-    keywords: entry.package.keywords ?? [],
-    links: entry.package.links ?? {},
-  }))
+  const names = (data.objects ?? []).map((entry) => entry.package.name)
+  const downloads = await fetchDownloads(names)
+  return (data.objects ?? []).map((entry) => {
+    const pkg = entry.package
+    return {
+      name: pkg.name,
+      version: pkg.version,
+      description: pkg.description ?? '',
+      keywords: pkg.keywords ?? [],
+      links: pkg.links ?? {},
+      publisher: pkg.publisher?.username ?? pkg.author?.name ?? '',
+      date: pkg.date ?? '',
+      quality: Math.round((entry.score?.detail?.quality ?? 0) * 100) / 100,
+      popularity: Math.round((entry.score?.detail?.popularity ?? 0) * 100) / 100,
+      maintenance: Math.round((entry.score?.detail?.maintenance ?? 0) * 100) / 100,
+      downloads: downloads.get(pkg.name) ?? 0,
+    }
+  })
+}
+
+async function fetchDownloads(names) {
+  const result = new Map()
+  if (names.length === 0) return result
+  try {
+    const url = `https://api.npmjs.org/downloads/point/last-month/${names.map((n) => encodeURIComponent(n)).join(',')}`
+    const response = await fetch(url, { signal: AbortSignal.timeout(15000) })
+    if (response.ok) {
+      const data = await response.json()
+      for (const [name, value] of Object.entries(data)) {
+        if (typeof value?.downloads === 'number') result.set(name, value.downloads)
+      }
+    }
+  } catch {
+    // 下载量统计失败不影响搜索结果
+  }
+  return result
 }

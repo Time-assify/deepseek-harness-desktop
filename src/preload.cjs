@@ -31,4 +31,14 @@ contextBridge.exposeInMainWorld('dshDesktop', {
   openDashboard: () => ipcRenderer.invoke('window:open-dashboard'),
   openDataDir: () => ipcRenderer.invoke('app:open-data-dir'),
   quitApp: () => ipcRenderer.invoke('app:quit'),
+  minimize: () => ipcRenderer.invoke('window:minimize'),
+  maximizeToggle: () => ipcRenderer.invoke('window:maximize-toggle'),
+  isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
+  closeWindow: () => ipcRenderer.invoke('window:close'),
+  setTheme: (theme) => ipcRenderer.invoke('theme:set', theme),
+  onMaximized: (callback) => {
+    const listener = (_event, maximized) => callback(maximized)
+    ipcRenderer.on('window:maximized-changed', listener)
+    return () => ipcRenderer.removeListener('window:maximized-changed', listener)
+  },
 })

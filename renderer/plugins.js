@@ -6,9 +6,16 @@ const queryEl = document.getElementById('query')
 const searchBtn = document.getElementById('searchBtn')
 const marketCountEl = document.getElementById('marketCount')
 const installedCountEl = document.getElementById('installedCount')
+const sortBtns = {
+  relevance: document.getElementById('sortRelevance'),
+  popular: document.getElementById('sortPopular'),
+  recent: document.getElementById('sortRecent'),
+}
 const logLines = []
 const installedSet = new Set()
 let busy = false
+let lastResults = []
+let currentSort = 'relevance'
 
 function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, (ch) => (
@@ -32,15 +39,32 @@ function setStatus(text, isError = false) {
   statusEl.classList.toggle('error', isError)
 }
 
-function itemHtml({ name, version, description, keywords = [] }, actionButton) {
+function itemHtml({ name, version, description, keywords = [], publisher = '', date = '', downloads = 0 }, actionButton) {
   const tags = keywords.slice(0, 4).map((kw) => `<span class="tag">${escapeHtml(kw)}</span>`).join('')
+  const metaBits = []
+  if (publisher) metaBits.push(`<span title="发布者">👤 ${escapeHtml(publisher)}</span>`)
+  if (downloads > 0) metaBits.push(`<span title="月下载量">⬇ ${formatCount(downloads)}</span>`)
+  if (date) metaBits.push(`<span title="最近更新">🕒 ${formatDate(date)}</span>`)
   return `
     <div class="item" data-name="${escapeHtml(name)}">
       <div class="name">${escapeHtml(name)} <span style="font-weight:400;color:var(--text-3)">v${escapeHtml(version ?? '?')}</span></div>
       <div class="desc">${escapeHtml(description ?? '')}</div>
       <div class="meta">${tags}<span class="spacer"></span>${actionButton}</div>
+      ${metaBits.length > 0 ? `<div class="meta small">${metaBits.join('')}</div>` : ''}
     </div>
   `
+}
+
+function formatCount(n) {
+  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
+  return String(n)
+}
+
+function formatDate(iso) {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 function showSkeleton(el, count = 4) {
@@ -84,6 +108,34 @@ function refreshMarketButtons() {
   }
 }
 
+function setSort(mode) {
+  currentSort = mode
+  for (const [key, btn] of Object.entries(sortBtns)) {
+    btn.classList.toggle('active', key === mode)
+  }
+  renderMarket()
+}
+
+function renderMarket() {
+  marketEl.innerHTML = ''
+  if (lastResults.length === 0) {
+    marketEl.innerHTML = '<div class="empty">没有找到匹配的插件</div>'
+  }
+  const sorted = [...lastResults]
+  if (currentSort === 'popular') {
+    sorted.sort((a, b) => (b.downloads ?? 0) - (a.downloads ?? 0))
+  } else if (currentSort === 'recent') {
+    sorted.sort((a, b) => String(b.date ?? '').localeCompare(String(a.date ?? '')))
+  }
+  for (const entry of sorted) {
+    marketEl.innerHTML += itemHtml(
+      entry,
+      `<button class="primary" data-install="${escapeHtml(entry.name)}">安装</button>`,
+    )
+  }
+  refreshMarketButtons()
+}
+
 async function search() {
   setStatus('搜索中…')
   showSkeleton(marketEl, 5)
@@ -94,18 +146,9 @@ async function search() {
     setStatus(`搜索失败：${result.error}`, true)
     return
   }
-  marketEl.innerHTML = ''
-  if (result.results.length === 0) {
-    marketEl.innerHTML = '<div class="empty">没有找到匹配的插件</div>'
-  }
-  for (const entry of result.results) {
-    marketEl.innerHTML += itemHtml(
-      entry,
-      `<button class="primary" data-install="${escapeHtml(entry.name)}">安装</button>`,
-    )
-  }
+  lastResults = result.results
+  renderMarket()
   marketCountEl.textContent = result.results.length > 0 ? `${result.results.length} 个` : ''
-  refreshMarketButtons()
   setStatus(`共 ${result.results.length} 个结果（npm 关键词 dsh-plugin）`)
 }
 
@@ -156,6 +199,9 @@ searchBtn.addEventListener('click', () => void search())
 queryEl.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') void search()
 })
+for (const [mode, btn] of Object.entries(sortBtns)) {
+  btn.addEventListener('click', () => setSort(mode))
+}
 
 void refreshInstalled()
 void search()

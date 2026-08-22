@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { app, BrowserWindow, ipcMain, Menu, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, Notification, shell, Tray, webContents, WebContentsView } from 'electron'
 import { DshServer } from './dsh-server.mjs'
 import {
   applyApiKeyToEnv,
@@ -21,7 +21,9 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PRELOAD = path.join(__dirname, 'preload.cjs')
 const LOADING_PAGE = path.join(__dirname, '..', 'renderer', 'loading.html')
+const TITLEBAR_PAGE = path.join(__dirname, '..', 'renderer', 'titlebar.html')
 const RENDERER_DIR = path.join(__dirname, '..', 'renderer')
+const TITLEBAR_H = 38
 
 const exeDir = app.isPackaged ? path.dirname(process.execPath) : path.resolve(__dirname, '..')
 const PORTABLE = process.env.DSH_DESKTOP_PORTABLE === '1' || existsSync(path.join(exeDir, 'portable.txt'))
@@ -40,14 +42,25 @@ if (!gotLock) {
   runApp()
 }
 
+function sendToAll(channel, payload) {
+  for (const wc of webContents.getAllWebContents()) {
+    if (!wc.isDestroyed()) wc.send(channel, payload)
+  }
+}
+
 function runApp() {
   let mainWindow = null
+  let contentView = null
+  let titleBar = null
   let settingsWindow = null
   let pluginsWindow = null
   let dashboardWindow = null
-  let settings = { apiKey: '', baseUrl: '', port: 0, presets: [], activePreset: '' }
+  let tray = null
+  let settings = { apiKey: '', baseUrl: '', port: 0, presets: [], activePreset: '', theme: 'dark' }
   let restartQueue = Promise.resolve()
   let pluginBusy = false
+  let isQuitting = false
+  let hideToTrayHintShown = false
 
   const state = {
     serverUrl: null,
@@ -64,10 +77,10 @@ function runApp() {
       state.running = true
       publishState()
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.once('did-finish-load', () => {
-          console.log(`[app] 页面加载完成: ${url}`)
-        })
-        mainWindow.loadURL(url).catch(() => {})
+        const view = contentView
+        if (view && !view.webContents.isDestroyed()) {
+          view.webContents.loadURL(url).catch(() => {})
+        }
       }
     },
     onLog: (line) => {
@@ -75,9 +88,7 @@ function runApp() {
         if (piece.trim() === '') continue
         state.logLines.push(piece)
         if (state.logLines.length > 500) state.logLines.shift()
-        for (const win of BrowserWindow.getAllWindows()) {
-          win.webContents.send('server:log', piece)
-        }
+        sendToAll('server:log', piece)
       }
       publishState()
     },
@@ -91,14 +102,12 @@ function runApp() {
 
   function publishState() {
     state.settings = settings
-    for (const win of BrowserWindow.getAllWindows()) {
-      win.webContents.send('state:changed', { ...state })
-    }
+    sendToAll('state:changed', { ...state })
   }
 
   function showLoadingPage() {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.loadFile(LOADING_PAGE).catch(() => {})
+    if (contentView && !contentView.webContents.isDestroyed()) {
+      contentView.webContents.loadFile(LOADING_PAGE).catch(() => {})
     }
   }
 
@@ -244,10 +253,19 @@ function runApp() {
       height: 820,
       minWidth: 960,
       minHeight: 620,
-      show: false,
+      frame: false,
       title: 'DeepSeek Harness',
-      backgroundColor: '#f5f6f8',
+      backgroundColor: '#0d1017',
       icon: path.join(__dirname, '..', 'assets', 'icon.ico'),
+    })
+
+    const layout = () => {
+      const [width, height] = mainWindow.getContentSize()
+      contentView.setBounds({ x: 0, y: TITLEBAR_H, width, height: Math.max(0, height - TITLEBAR_H) })
+      titleBar.setBounds({ x: 0, y: 0, width, height: TITLEBAR_H })
+    }
+
+    contentView = new WebContentsView({
       webPreferences: {
         preload: PRELOAD,
         contextIsolation: true,
@@ -255,25 +273,122 @@ function runApp() {
         spellcheck: false,
       },
     })
-    mainWindow.once('ready-to-show', () => mainWindow?.show())
-    captureRendererConsole(mainWindow)
+    titleBar = new WebContentsView({
+      webPreferences: {
+        preload: PRELOAD,
+        contextIsolation: true,
+        nodeIntegration: false,
+        spellcheck: false,
+      },
+    })
+    mainWindow.contentView.addChildView(contentView)
+    mainWindow.contentView.addChildView(titleBar)
+    layout()
+    mainWindow.on('resize', layout)
+    const forwardMaxState = () => {
+      titleBar?.webContents.send('window:maximized-changed', mainWindow?.isMaximized() ?? false)
+    }
+    mainWindow.on('maximize', forwardMaxState)
+    mainWindow.on('unmaximize', forwardMaxState)
+    mainWindow.show()
+    mainWindow.focus()
+
+    captureRendererConsole(contentView)
+    captureRendererConsole(titleBar)
     mainWindow.on('closed', () => {
       mainWindow = null
+      contentView = null
+      titleBar = null
     })
-    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    mainWindow.on('close', (event) => {
+      if (isQuitting) return
+      event.preventDefault()
+      mainWindow.hide()
+      if (!hideToTrayHintShown) {
+        hideToTrayHintShown = true
+        notify('DeepSeek Harness 已最小化到托盘', '右键托盘图标可退出应用')
+      }
+    })
+    contentView.webContents.setWindowOpenHandler(({ url }) => {
       if (!url.startsWith('http://127.0.0.1') && !url.startsWith('http://localhost')) {
         void shell.openExternal(url)
       }
       return { action: 'deny' }
     })
-    mainWindow.webContents.on('will-navigate', (event, url) => {
+    contentView.webContents.on('will-navigate', (event, url) => {
       const local = url.startsWith('http://127.0.0.1') || url.startsWith('http://localhost')
       if (!local) {
         event.preventDefault()
         void shell.openExternal(url)
       }
     })
-    mainWindow.loadFile(LOADING_PAGE).catch(() => {})
+    contentView.webContents.loadFile(LOADING_PAGE).catch(() => {})
+    titleBar.webContents.loadFile(TITLEBAR_PAGE).catch(() => {})
+  }
+
+  function createTray() {
+    if (tray) return
+    let image
+    try {
+      image = nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'icon.ico'))
+      if (image.isEmpty()) throw new Error('empty')
+    } catch {
+      image = nativeImage.createEmpty()
+    }
+    tray = new Tray(image.resize({ width: 16, height: 16 }))
+    tray.setToolTip('DeepSeek Harness')
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        {
+          label: '显示主窗口',
+          click: () => showMainWindow(),
+        },
+        { type: 'separator' },
+        {
+          label: '设置',
+          click: () => openSettingsWindow(),
+        },
+        {
+          label: '插件商店',
+          click: () => openPluginsWindow(),
+        },
+        {
+          label: '会话成本仪表盘',
+          click: () => openDashboardWindow(),
+        },
+        { type: 'separator' },
+        {
+          label: '重启 dsh 服务',
+          click: () => void restartServer(),
+        },
+        { type: 'separator' },
+        {
+          label: '退出',
+          click: () => {
+            isQuitting = true
+            app.quit()
+          },
+        },
+      ]),
+    )
+    tray.on('click', () => showMainWindow())
+    tray.on('double-click', () => showMainWindow())
+  }
+
+  function showMainWindow() {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      createMainWindow()
+      return
+    }
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
+  }
+
+  function notify(title, body) {
+    if (Notification.isSupported()) {
+      new Notification({ title, body, icon: path.join(__dirname, '..', 'assets', 'icon.ico') }).show()
+    }
   }
 
   function makeWindow(options) {
@@ -446,9 +561,7 @@ function runApp() {
       state.logLines.push(`插件安装开始: ${name}`)
       const result = await installPlugin(DSH_HOME, name, {
         onLine: (line) => {
-          for (const win of BrowserWindow.getAllWindows()) {
-            win.webContents.send('plugins:log', line)
-          }
+          sendToAll('plugins:log', line)
         },
       })
       state.logLines.push(`插件安装完成: ${name}`)
@@ -470,9 +583,7 @@ function runApp() {
       state.logLines.push(`插件移除开始: ${name}`)
       await removePlugin(DSH_HOME, name, {
         onLine: (line) => {
-          for (const win of BrowserWindow.getAllWindows()) {
-            win.webContents.send('plugins:log', line)
-          }
+          sendToAll('plugins:log', line)
         },
       })
       state.logLines.push(`插件移除完成: ${name}`)
@@ -499,7 +610,35 @@ function runApp() {
   ipcMain.handle('app:open-data-dir', () => {
     void shell.openPath(DSH_HOME)
   })
-  ipcMain.handle('app:quit', () => app.quit())
+  ipcMain.handle('app:quit', () => {
+    isQuitting = true
+    app.quit()
+  })
+
+  ipcMain.handle('window:minimize', () => {
+    mainWindow?.minimize()
+  })
+  ipcMain.handle('window:maximize-toggle', () => {
+    if (!mainWindow) return false
+    if (mainWindow.isMaximized()) {
+      mainWindow.unmaximize()
+      return false
+    }
+    mainWindow.maximize()
+    return true
+  })
+  ipcMain.handle('window:is-maximized', () => mainWindow?.isMaximized() ?? false)
+  ipcMain.handle('window:close', () => {
+    mainWindow?.close()
+  })
+  ipcMain.handle('theme:set', (_event, theme) => {
+    const next = theme === 'light' ? 'light' : 'dark'
+    settings = { ...settings, theme: next }
+    nativeTheme.themeSource = next
+    void writeSettings(path.join(app.getPath('userData'), 'settings.json'), settings)
+    publishState()
+    return { ok: true, theme: settings.theme }
+  })
 
   app.on('second-instance', () => {
     if (mainWindow) {
@@ -511,6 +650,7 @@ function runApp() {
   app.whenReady().then(async () => {
     app.setAppUserModelId('com.deepseekharness.desktop')
     buildMenu()
+    createTray()
     const settingsPath = path.join(app.getPath('userData'), 'settings.json')
     settings = { ...settings, ...(await readSettings(settingsPath)) }
     settings.presets = normalizePresets(settings)
@@ -522,10 +662,21 @@ function runApp() {
   })
 
   app.on('window-all-closed', () => {
+    if (!isQuitting) {
+      // 主窗口关闭时最小化到托盘，应用继续在后台运行
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.hide()
+      }
+      return
+    }
     app.quit()
   })
 
   let quitting = false
+  app.on('before-quit', () => {
+    isQuitting = true
+    quitting = true
+  })
   app.on('will-quit', (event) => {
     if (quitting) return
     if (server.isRunning) {
