@@ -92,15 +92,6 @@ Electron 主进程
 - 价格表（每百万 token，人民币）：deepseek-chat 输入 ¥2 / 缓存读 ¥0.5 / 输出 ¥8；deepseek-reasoner 输入 ¥4 / 缓存读 ¥1 / 输出 ¥16
 - 输入成本 =（输入 - 缓存读）× 输入价 + 缓存读 × 缓存读价；无法识别的模型按 deepseek-chat 估算，仅供参考
 
-## 已知限制
-
-- **终端类功能**：`node-pty` 原生模块未编译（系统缺少 VS Build Tools 且 dsh Web profile 不直接依赖它），如需完整终端体验，安装 VS Build Tools 后运行 `pnpm rebuild node-pty`
-- **打包体积较大**：`asar: false` 平铺打包（避免 pnpm 软链接布局与 asar 的兼容问题），安装体积约 300 MB
-- 若用户 profile 中安装的第三方插件依赖不可达的网络（如 `models.dev`），dsh 会启动失败；请用插件商店卸载或官方命令移除：
-  `dsh plugin --profile web remove <包名>`
-- 插件商店搜索依赖 npm registry 网络连通；含原生构建脚本的插件安装时自动执行其构建（需本机有编译工具链才能成功）
-- 尚未配置代码签名，Windows SmartScreen 可能提示
-
 ## License
 
 [MIT](LICENSE)
